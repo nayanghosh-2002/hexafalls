@@ -1,0 +1,117 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Merriweather:wght@700;900&family=Sour+Gummy:wght@700;800&display=swap');
+
+:root {
+  --background: #F7F7F5;
+  --foreground: #0A0A0A;
+  --primary: #1B3A6B;
+  --primary-light: #EEF2FF;
+  --muted: #666662;
+  --border: #E8E8E8;
+  --surface: #FFFFFF;
+  --surface-muted: #F0F0EE;
+  --surface-subtle: #FAFAF8;
+}
+
+.dark {
+  --background: #141414;
+  --foreground: #F2F2F0;
+  --primary: #2F6FD1;
+  --primary-light: #152238;
+  --muted: #A8A8A4;
+  --border: #2A2A28;
+  --surface: #1A1A19;
+  --surface-muted: #222221;
+  --surface-subtle: #181817;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: 'Inter', sans-serif;
+  margin: 0;
+}
+
+h1, h2, h3 {
+  font-family: 'Merriweather', serif;
+}
+
+.logo {
+  font-family: 'Sour Gummy', sans-serif !important;
+}
+
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #DDDDD9; border-radius: 3px; }
+.dark ::-webkit-scrollbar-thumb { background: #3A3A38; }
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideDown {
+  from { opacity: 0; transform: translateY(-100%); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+.animate-fade-in { animation: fadeIn 0.25s ease; }
+.animate-slide-down { animation: slideDown 0.4s ease; }
+.animate-pulse-dot { animation: pulse-dot 2s ease infinite; }
+
+@layer components {
+  .auth-field-label {
+    @apply mb-1.5 block text-[10px] font-semibold uppercase tracking-widest text-muted;
+  }
+
+  .auth-input {
+    @apply w-full rounded-lg border border-border bg-surface px-3.5 py-3 text-[15px] text-foreground outline-none transition-colors placeholder:text-muted focus:border-primary;
+  }
+
+  .auth-btn-primary {
+    @apply mb-0 flex min-h-[50px] w-full items-center justify-center rounded-[10px] bg-primary py-3.5 text-[15px] font-semibold text-white transition-opacity duration-200 hover:opacity-[0.88] disabled:opacity-60;
+  }
+
+  .auth-btn-google {
+    @apply mb-2 flex min-h-[50px] w-full items-center justify-center gap-2.5 rounded-[10px] border border-border bg-surface py-3.5 text-[15px] font-medium text-foreground transition-colors duration-200 hover:bg-surface-muted;
+  }
+
+  .auth-btn-github {
+    @apply mb-0 flex min-h-[50px] w-full items-center justify-center gap-2.5 rounded-[10px] bg-[#24292F] py-3.5 text-[15px] font-semibold text-white transition-opacity duration-200 hover:opacity-85;
+  }
+
+  .auth-footer-text {
+    @apply mt-4 text-center text-[13px] text-muted;
+  }
+
+  .auth-card {
+    @apply rounded-2xl border border-border bg-surface p-6 shadow-[0_4px_24px_rgba(15,23,42,0.07)] sm:p-7 dark:shadow-[0_4px_28px_rgba(0,0,0,0.42)];
+  }
+
+  .auth-field-group {
+    @apply mb-3.5;
+  }
+
+  .auth-field-group-last {
+    @apply mb-4;
+  }
+}
+
+html.slide-active,
+html.slide-active body {
+  overflow: hidden;
+  background: var(--background);
+}
