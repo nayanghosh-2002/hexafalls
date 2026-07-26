@@ -24,6 +24,15 @@ const buildIcon = (
   </svg>
 );
 
+const communityIcon = (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
+    <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+    <circle cx="9" cy="7" r="4" />
+    <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
+    <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+  </svg>
+);
+
 const saveIcon = (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
     <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
@@ -157,109 +166,110 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <NavCountsContext.Provider value={{ refreshNavCounts }}>
-    {/* Apply col-resize cursor to the whole page during drag so it doesn't flicker */}
-    <div
-      className="flex h-screen overflow-hidden animate-fade-in bg-surface"
-      style={resizing ? { cursor: "col-resize", userSelect: "none" } : undefined}
-    >
-      {open && (
-        <button
-          type="button"
-          className="fixed inset-0 z-40 bg-black/20 md:hidden"
-          onClick={close}
-          aria-label="Close sidebar"
-        />
-      )}
-
-      <aside
-        className={`relative flex shrink-0 flex-col overflow-hidden border-r border-border bg-surface ${
-          !resizing ? "transition-[width] duration-300 ease-in-out" : ""
-        } ${
-          open
-            ? "fixed inset-y-0 left-0 z-50 md:relative md:z-auto"
-            : "relative z-auto"
-        }`}
-        style={{ width: currentWidth }}
+      {/* Apply col-resize cursor to the whole page during drag so it doesn't flicker */}
+      <div
+        className="flex h-screen overflow-hidden animate-fade-in bg-surface"
+        style={resizing ? { cursor: "col-resize", userSelect: "none" } : undefined}
       >
-        {/* Header: Logo left, hamburger right */}
-        <div className={`flex min-h-[57px] shrink-0 items-center py-3.5 ${open ? "px-3" : "justify-center px-2"}`}>
-          {open && (
-            <div className="min-w-0 flex-1 overflow-hidden">
-              <Logo className="text-[17px]" />
-            </div>
-          )}
-          <SidebarToggle />
-        </div>
-
-        {/* Nav items */}
-        <nav className={`flex flex-col gap-0.5 ${open ? "p-3" : "px-2 py-3"}`}>
-          {navItem("/feed", "Feed", feedIcon, feedActive)}
-          {navItem("/building", "Building", buildIcon, pathname.startsWith("/building"), buildingCount || undefined)}
-          {navItem("/saved", "Saved", saveIcon, pathname === "/saved", savedCount || undefined)}
-          {navItem("/profile", "Profile", profileIcon, pathname === "/profile")}
-        </nav>
-
-        {/* Divider */}
-        <div className={`shrink-0 border-t border-border ${open ? "mx-3" : "mx-2"}`} />
-
-        {/* Projects section */}
-        <div className={`mt-2 flex-1 overflow-y-auto overflow-x-hidden pb-3 ${open ? "px-3" : "px-2"}`}>
-          {userProjects.length > 0 && (
-            <div className="mt-2">
-              {open && (
-                <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-muted">
-                  Projects
-                </p>
-              )}
-              <div className="flex flex-col gap-0.5">
-                {userProjects.slice(0, 10).map((project) => {
-                  const href = `/project/${project.github_username}/${project.repo_name}`;
-                  const active = pathname === href;
-                  return (
-                    <Link
-                      key={project.id}
-                      href={href}
-                      title={!open ? project.repo_name : undefined}
-                      aria-label={project.repo_name}
-                      onClick={() => { if (window.innerWidth < 768 && open) close(); }}
-                      className={`flex min-h-[38px] items-center rounded-lg transition-colors duration-200 ${
-                        open ? "gap-3 px-3 py-2 text-[13px]" : "justify-center p-2.5"
-                      } ${
-                        active
-                          ? "bg-primary-light font-semibold text-primary"
-                          : "font-medium text-muted hover:bg-surface-muted hover:text-foreground"
-                      }`}
-                    >
-                      <span className="shrink-0 text-muted">{projectIcon}</span>
-                      {open && <span className="min-w-0 flex-1 truncate">{project.repo_name}</span>}
-                    </Link>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-
-        {showSidebarThemeToggle && (
-          <div className={`mt-auto ${open ? "flex items-center justify-between px-3 py-3" : "flex justify-center py-3"}`}>
-            <ThemeToggle />
-          </div>
-        )}
-
-        {/* Drag handle — right edge of sidebar */}
         {open && (
-          <div
-            onMouseDown={startResize}
-            className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
-            aria-hidden
+          <button
+            type="button"
+            className="fixed inset-0 z-40 bg-black/20 md:hidden"
+            onClick={close}
+            aria-label="Close sidebar"
           />
         )}
-      </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface">
-        <main className="flex-1 overflow-y-auto bg-surface">{children}</main>
+        <aside
+          className={`relative flex shrink-0 flex-col overflow-hidden border-r border-border bg-surface ${
+            !resizing ? "transition-[width] duration-300 ease-in-out" : ""
+          } ${
+            open
+              ? "fixed inset-y-0 left-0 z-50 md:relative md:z-auto"
+              : "relative z-auto"
+          }`}
+          style={{ width: currentWidth }}
+        >
+          {/* Header: Logo left, hamburger right */}
+          <div className={`flex min-h-[57px] shrink-0 items-center py-3.5 ${open ? "px-3" : "justify-center px-2"}`}>
+            {open && (
+              <div className="min-w-0 flex-1 overflow-hidden">
+                <Logo className="text-[17px]" />
+              </div>
+            )}
+            <SidebarToggle />
+          </div>
+
+          {/* Nav items */}
+          <nav className={`flex flex-col gap-0.5 ${open ? "p-3" : "px-2 py-3"}`}>
+            {navItem("/feed", "Feed", feedIcon, feedActive)}
+            {navItem("/building", "Building", buildIcon, pathname.startsWith("/building"), buildingCount || undefined)}
+            {navItem("/community", "Community", communityIcon, pathname.startsWith("/community"))}
+            {navItem("/saved", "Saved", saveIcon, pathname === "/saved", savedCount || undefined)}
+            {navItem("/profile", "Profile", profileIcon, pathname === "/profile")}
+          </nav>
+
+          {/* Divider */}
+          <div className={`shrink-0 border-t border-border ${open ? "mx-3" : "mx-2"}`} />
+
+          {/* Projects section */}
+          <div className={`mt-2 flex-1 overflow-y-auto overflow-x-hidden pb-3 ${open ? "px-3" : "px-2"}`}>
+            {userProjects.length > 0 && (
+              <div className="mt-2">
+                {open && (
+                  <p className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-widest text-muted">
+                    Projects
+                  </p>
+                )}
+                <div className="flex flex-col gap-0.5">
+                  {userProjects.slice(0, 10).map((project) => {
+                    const href = `/project/${project.github_username}/${project.repo_name}`;
+                    const active = pathname === href;
+                    return (
+                      <Link
+                        key={project.id}
+                        href={href}
+                        title={!open ? project.repo_name : undefined}
+                        aria-label={project.repo_name}
+                        onClick={() => { if (window.innerWidth < 768 && open) close(); }}
+                        className={`flex min-h-[38px] items-center rounded-lg transition-colors duration-200 ${
+                          open ? "gap-3 px-3 py-2 text-[13px]" : "justify-center p-2.5"
+                        } ${
+                          active
+                            ? "bg-primary-light font-semibold text-primary"
+                            : "font-medium text-muted hover:bg-surface-muted hover:text-foreground"
+                        }`}
+                      >
+                        <span className="shrink-0 text-muted">{projectIcon}</span>
+                        {open && <span className="min-w-0 flex-1 truncate">{project.repo_name}</span>}
+                      </Link>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {showSidebarThemeToggle && (
+            <div className={`mt-auto ${open ? "flex items-center justify-between px-3 py-3" : "flex justify-center py-3"}`}>
+              <ThemeToggle />
+            </div>
+          )}
+
+          {/* Drag handle — right edge of sidebar */}
+          {open && (
+            <div
+              onMouseDown={startResize}
+              className="absolute inset-y-0 right-0 w-1 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
+              aria-hidden
+            />
+          )}
+        </aside>
+
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-surface">
+          <main className="flex-1 overflow-y-auto bg-surface">{children}</main>
+        </div>
       </div>
-    </div>
     </NavCountsContext.Provider>
   );
 }
