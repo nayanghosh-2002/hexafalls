@@ -1,9 +1,7 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import type { BuildIdea, RawPost, StructuredProblem } from "./types";
 
-// Use gemini-2.5-flash-lite by default — it has a generous free tier and is
-// cheap enough to avoid the monthly spending cap under normal scrape volume.
-// Override with GEMINI_MODEL=gemini-2.5-flash in .env.local for higher quality.
+// Use gemini-2.0-flash-lite by default
 export const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash-lite";
 
 function getModel() {
@@ -56,7 +54,6 @@ export async function structureProblem(
       ? `Reddit r/${post.subreddit ?? "unknown"}`
       : "Hacker News Ask HN";
 
-  // Truncate very long bodies to keep token usage reasonable
   const body = (post.body || "(no body)").slice(0, 2000);
 
   try {
@@ -72,8 +69,16 @@ export async function structureProblem(
     return JSON.parse(jsonMatch[0]) as StructuredProblem;
   } catch (err) {
     const msg = String(err);
-    if (msg.includes("429") || msg.includes("spending cap") || msg.includes("quota")) {
-      throw new Error(`Gemini API limit hit (${msg.includes("spending cap") ? "monthly spending cap exceeded — go to ai.studio/spend to increase it" : "rate limited"})`);
+    if (
+      msg.includes("429") ||
+      msg.includes("spending cap") ||
+      msg.includes("quota") ||
+      msg.includes("RESOURCE_EXHAUSTED") ||
+      msg.includes("limit")
+    ) {
+      throw new Error(
+        `Gemini API limit hit (${msg.includes("spending cap") ? "monthly spending cap exceeded" : "rate limited or quota exceeded"})`
+      );
     }
     console.error("Gemini structure error:", err);
     return null;
@@ -166,4 +171,24 @@ Return ONLY valid JSON array:
     console.error("Gemini ideas error:", err);
     return { ideas: [], stackUsed, error: "Failed to generate build ideas" };
   }
+}
+
+
+
+
+// Fallback card builder when Gemini API is unavailable or rate limited
+export function createFallbackProblem(post: RawPost): StructuredProblem {
+  return {
+    headline: post.title.slice(0, 120),
+    description: (post.body || post.title).slice(0, 200),
+    domain: "Other",
+    difficulty: "Medium",
+    context: (post.body || post.title).slice(0, 300),
+    tried_before: "No specific prior attempts mentioned in raw post.",
+    time_estimate: "2-4 weeks",
+    tags: [post.source, post.subreddit || "community"].filter(Boolean),
+    opportunity_score: 70,
+    solution_exists_score: 3,
+    gap_analysis: "Generated via fallback stream while AI is busy.",
+  };
 }

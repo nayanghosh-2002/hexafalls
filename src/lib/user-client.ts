@@ -186,3 +186,20 @@ export async function analyzeLinks(links: string[]): Promise<{
     return null;
   }
 }
+
+
+export async function fetchUserSolutions(): Promise<{
+  solutions: any[];
+  stats: { solvedCount: number; avgRating: number };
+}> {
+  try {
+    const data = await authFetchJson<{
+      solutions: any[];
+      stats: { solvedCount: number; avgRating: number };
+    }>("/api/user/solutions");
+
+    return data ?? { solutions: [], stats: { solvedCount: 0, avgRating: 0 } };
+  } catch {
+    return { solutions: [], stats: { solvedCount: 0, avgRating: 0 } };
+  }
+}

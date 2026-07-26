@@ -8,7 +8,14 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useTheme } from "@/components/ThemeProvider";
 import { STACK_OPTIONS, DOMAIN_OPTIONS, GOAL_OPTIONS } from "@/lib/constants";
 import { signOut } from "@/lib/auth";
-import { fetchUserProfile, saveUserProfile, fetchUserProjects, analyzeLinks, getAuthHeaders } from "@/lib/user-client";
+import {
+  fetchUserProfile,
+  saveUserProfile,
+  fetchUserProjects,
+  fetchUserSolutions,
+  analyzeLinks,
+  getAuthHeaders,
+} from "@/lib/user-client";
 import { getSupabaseBrowser } from "@/lib/supabase-browser";
 import type { OnboardingProfile, UserProject } from "@/lib/types";
 
@@ -167,6 +174,11 @@ export default function ProfilePage() {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<OnboardingProfile | null>(null);
   const [projects, setProjects] = useState<UserProject[]>([]);
+
+  // Solved Solutions & Stats State
+  const [solvedSolutions, setSolvedSolutions] = useState<any[]>([]);
+  const [solvedStats, setSolvedStats] = useState({ solvedCount: 0, avgRating: 0 });
+
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<EditForm>(toForm(null, null));
   const [saving, setSaving] = useState(false);
@@ -180,16 +192,22 @@ export default function ProfilePage() {
   useEffect(() => {
     async function load() {
       const supabase = getSupabaseBrowser();
-      const [{ data: ud }, prof, projs] = await Promise.all([
+      const [{ data: ud }, prof, projs, solData] = await Promise.all([
         supabase?.auth.getUser() ?? Promise.resolve({ data: { user: null } }),
         fetchUserProfile(),
         fetchUserProjects(),
+        fetchUserSolutions(),
       ]);
       const u = ud?.user ?? null;
       setUser(u);
       setProfile(prof);
       setProjects(projs);
       setForm(toForm(prof, u));
+
+      if (solData) {
+        setSolvedSolutions(solData.solutions ?? []);
+        setSolvedStats(solData.stats ?? { solvedCount: 0, avgRating: 0 });
+      }
 
       if (!autoDetectRan.current && prof && prof.stack.length === 0 && prof.github_username) {
         autoDetectRan.current = true;
@@ -234,7 +252,6 @@ export default function ProfilePage() {
       setProfile(updated);
       setEditing(false);
 
-      // Auto-detect stack if github username was just added and stack is still empty
       if (newGitHubUsername && form.stack.length === 0 && !autoDetectRan.current) {
         autoDetectRan.current = true;
         setDetectingStack(true);
@@ -315,317 +332,378 @@ export default function ProfilePage() {
 
   return (
     <div className="flex h-full gap-0">
-
-        {/* ── LEFT PANEL ── */}
-        <aside className="flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border p-5 xl:w-[340px]">
-
-          {/* Identity */}
-          <div className="rounded-2xl border border-border bg-surface p-5">
-            {editing ? (
-              <div className="space-y-4">
-                <div className="flex justify-center pb-1">
-                  <Avatar url={form.avatar_url || undefined} name={form.display_name || displayName} size={72} />
+      {/* ── LEFT PANEL ── */}
+      <aside className="flex w-[300px] shrink-0 flex-col gap-5 overflow-y-auto border-r border-border p-5 xl:w-[340px]">
+        {/* Identity */}
+        <div className="rounded-2xl border border-border bg-surface p-5">
+          {editing ? (
+            <div className="space-y-4">
+              <div className="flex justify-center pb-1">
+                <Avatar url={form.avatar_url || undefined} name={form.display_name || displayName} size={72} />
+              </div>
+              <div>
+                <label className={lbl}>Avatar URL</label>
+                <input type="url" value={form.avatar_url} onChange={(e) => setForm(f => ({ ...f, avatar_url: e.target.value }))} placeholder="https://..." className={inp} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={lbl}>Name</label>
+                  <input type="text" value={form.display_name} onChange={(e) => setForm(f => ({ ...f, display_name: e.target.value }))} placeholder="Your name" className={inp} />
                 </div>
                 <div>
-                  <label className={lbl}>Avatar URL</label>
-                  <input type="url" value={form.avatar_url} onChange={(e) => setForm(f => ({ ...f, avatar_url: e.target.value }))} placeholder="https://..." className={inp} />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={lbl}>Name</label>
-                    <input type="text" value={form.display_name} onChange={(e) => setForm(f => ({ ...f, display_name: e.target.value }))} placeholder="Your name" className={inp} />
-                  </div>
-                  <div>
-                    <label className={lbl}>Age</label>
-                    <input type="number" value={form.age} onChange={(e) => setForm(f => ({ ...f, age: e.target.value }))} placeholder="25" min={10} max={100} className={inp} />
-                  </div>
-                </div>
-                <div>
-                  <label className={lbl}>Bio</label>
-                  <textarea rows={3} value={form.bio} onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))} placeholder="What you build..." className={ta} />
-                </div>
-                <div>
-                  <label className={lbl}>Location</label>
-                  <input type="text" value={form.location} onChange={(e) => setForm(f => ({ ...f, location: e.target.value }))} placeholder="City, Country" className={inp} />
-                </div>
-                <div>
-                  <label className={lbl}>Website</label>
-                  <input type="url" value={form.website} onChange={(e) => setForm(f => ({ ...f, website: e.target.value }))} placeholder="https://..." className={inp} />
-                </div>
-                <div>
-                  <label className={lbl}>LinkedIn URL</label>
-                  <input type="url" value={form.linkedin_url} onChange={(e) => setForm(f => ({ ...f, linkedin_url: e.target.value }))} placeholder="https://linkedin.com/in/..." className={inp} />
-                </div>
-                <div>
-                  <label className={lbl}>GitHub Username</label>
-                  <div className="flex items-center gap-2">
-                    <input type="text" value={form.github_username} onChange={(e) => setForm(f => ({ ...f, github_username: e.target.value.replace(/^@/, "").trim() }))} placeholder="yourusername" className={`${inp} flex-1`} />
-                  </div>
-                  {form.github_username && form.stack.length === 0 && (
-                    <p className="mt-1 text-[11px] text-primary">Stack will be auto-detected on save</p>
-                  )}
-                </div>
-                <div className="flex gap-2.5 pt-1">
-                  <button onClick={() => setEditing(false)} className="flex-1 rounded-xl border border-border py-2.5 text-[13px] font-medium text-muted hover:text-foreground transition-colors">Cancel</button>
-                  <button onClick={handleSave} disabled={saving} className="flex-1 rounded-xl bg-primary py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
-                    {saving ? "Saving…" : "Save"}
-                  </button>
+                  <label className={lbl}>Age</label>
+                  <input type="number" value={form.age} onChange={(e) => setForm(f => ({ ...f, age: e.target.value }))} placeholder="25" min={10} max={100} className={inp} />
                 </div>
               </div>
-            ) : (
-              <div className="space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <Avatar url={avatarUrl} name={displayName} size={80} />
-                  <button onClick={() => { setForm(toForm(profile, user)); setEditing(true); }}
-                    className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted hover:border-primary/30 hover:text-foreground transition-colors">
-                    <EditIcon /> Edit
-                  </button>
+              <div>
+                <label className={lbl}>Bio</label>
+                <textarea rows={3} value={form.bio} onChange={(e) => setForm(f => ({ ...f, bio: e.target.value }))} placeholder="What you build..." className={ta} />
+              </div>
+              <div>
+                <label className={lbl}>Location</label>
+                <input type="text" value={form.location} onChange={(e) => setForm(f => ({ ...f, location: e.target.value }))} placeholder="City, Country" className={inp} />
+              </div>
+              <div>
+                <label className={lbl}>Website</label>
+                <input type="url" value={form.website} onChange={(e) => setForm(f => ({ ...f, website: e.target.value }))} placeholder="https://..." className={inp} />
+              </div>
+              <div>
+                <label className={lbl}>LinkedIn URL</label>
+                <input type="url" value={form.linkedin_url} onChange={(e) => setForm(f => ({ ...f, linkedin_url: e.target.value }))} placeholder="https://linkedin.com/in/..." className={inp} />
+              </div>
+              <div>
+                <label className={lbl}>GitHub Username</label>
+                <div className="flex items-center gap-2">
+                  <input type="text" value={form.github_username} onChange={(e) => setForm(f => ({ ...f, github_username: e.target.value.replace(/^@/, "").trim() }))} placeholder="yourusername" className={`${inp} flex-1`} />
                 </div>
-
-                <div>
-                  <h1 className="text-[22px] font-bold leading-tight tracking-tight text-foreground">
-                    {displayName}
-                    {profile?.age ? <span className="ml-2 text-[16px] font-normal text-muted">{profile.age}</span> : null}
-                  </h1>
-                  {user?.email && <p className="mt-0.5 text-[13px] text-muted">{user.email}</p>}
-                </div>
-
-                {profile?.bio && (
-                  <p className="text-[14px] leading-relaxed text-foreground/75">{profile.bio}</p>
+                {form.github_username && form.stack.length === 0 && (
+                  <p className="mt-1 text-[11px] text-primary">Stack will be auto-detected on save</p>
                 )}
+              </div>
+              <div className="flex gap-2.5 pt-1">
+                <button onClick={() => setEditing(false)} className="flex-1 rounded-xl border border-border py-2.5 text-[13px] font-medium text-muted hover:text-foreground transition-colors">Cancel</button>
+                <button onClick={handleSave} disabled={saving} className="flex-1 rounded-xl bg-primary py-2.5 text-[13px] font-semibold text-white hover:opacity-90 disabled:opacity-50">
+                  {saving ? "Saving…" : "Save"}
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-start justify-between gap-3">
+                <Avatar url={avatarUrl} name={displayName} size={80} />
+                <button onClick={() => { setForm(toForm(profile, user)); setEditing(true); }}
+                  className="flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-[12px] font-medium text-muted hover:border-primary/30 hover:text-foreground transition-colors">
+                  <EditIcon /> Edit
+                </button>
+              </div>
 
-                <div className="flex flex-col gap-1.5 text-[13px] text-muted">
-                  {profile?.location && (
-                    <span className="flex items-center gap-2"><PinIcon />{profile.location}</span>
-                  )}
-                  {profile?.website && (
-                    <a href={profile.website} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-2 hover:text-foreground transition-colors">
-                      <WebIcon />{profile.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              <div>
+                <h1 className="text-[22px] font-bold leading-tight tracking-tight text-foreground">
+                  {displayName}
+                  {profile?.age ? <span className="ml-2 text-[16px] font-normal text-muted">{profile.age}</span> : null}
+                </h1>
+                {user?.email && <p className="mt-0.5 text-[13px] text-muted">{user.email}</p>}
+              </div>
+
+              {profile?.bio && (
+                <p className="text-[14px] leading-relaxed text-foreground/75">{profile.bio}</p>
+              )}
+
+              <div className="flex flex-col gap-1.5 text-[13px] text-muted">
+                {profile?.location && (
+                  <span className="flex items-center gap-2"><PinIcon />{profile.location}</span>
+                )}
+                {profile?.website && (
+                  <a href={profile.website} target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-2 hover:text-foreground transition-colors">
+                    <WebIcon />{profile.website.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+                  </a>
+                )}
+              </div>
+
+              {extLinks.length > 0 && (
+                <div className="flex flex-col gap-2 pt-1">
+                  {extLinks.map((l) => (
+                    <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-2.5 rounded-xl border border-border px-3.5 py-2.5 text-[13px] font-medium text-muted hover:border-primary/30 hover:text-foreground transition-colors">
+                      {l.icon}{l.label}
                     </a>
-                  )}
+                  ))}
                 </div>
+              )}
+            </div>
+          )}
+        </div>
 
-                {extLinks.length > 0 && (
-                  <div className="flex flex-col gap-2 pt-1">
-                    {extLinks.map((l) => (
-                      <a key={l.href} href={l.href} target="_blank" rel="noopener noreferrer"
-                        className="flex items-center gap-2.5 rounded-xl border border-border px-3.5 py-2.5 text-[13px] font-medium text-muted hover:border-primary/30 hover:text-foreground transition-colors">
-                        {l.icon}{l.label}
-                      </a>
+        {/* Builder Stats */}
+        <div className="rounded-2xl border border-border bg-surface p-5 space-y-3">
+          <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Builder Stats</p>
+          <div className="grid grid-cols-2 gap-3 pt-1">
+            <div className="rounded-xl border border-border bg-surface-subtle p-3 text-center">
+              <p className="text-2xl font-black text-primary">{solvedStats.solvedCount}</p>
+              <p className="text-[11px] font-medium text-muted">Problems Solved</p>
+            </div>
+            <div className="rounded-xl border border-border bg-surface-subtle p-3 text-center">
+              <p className="text-2xl font-black text-amber-500">
+                {solvedStats.avgRating > 0 ? `${solvedStats.avgRating} ★` : "N/A"}
+              </p>
+              <p className="text-[11px] font-medium text-muted">Avg Peer Rating</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Goal */}
+        {goalLabel && (
+          <div className="rounded-2xl border border-border bg-surface px-5 py-4">
+            <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Builder Goal</p>
+            <p className="mt-1.5 text-[15px] font-semibold text-foreground">{goalLabel}</p>
+          </div>
+        )}
+
+        {/* Extras */}
+        {(editing || hasCerts || hasExp || hasEdu) && (
+          <div className="rounded-2xl border border-border bg-surface p-5 space-y-5">
+            {(editing || hasCerts) && (
+              <div>
+                <p className={lbl}>Certifications</p>
+                {editing ? (
+                  <textarea rows={3} value={form.certifications}
+                    onChange={(e) => setForm(f => ({ ...f, certifications: e.target.value }))}
+                    placeholder={"AWS Solutions Architect\nGoogle Cloud Professional"} className={ta} />
+                ) : (
+                  <ul className="mt-2 space-y-2">
+                    {profile?.certifications?.map((c) => (
+                      <li key={c} className="flex items-center gap-2.5 text-[13px] text-foreground">
+                        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />{c}
+                      </li>
                     ))}
-                  </div>
+                  </ul>
+                )}
+              </div>
+            )}
+            {(hasCerts || editing) && (hasExp || editing) && <div className="border-t border-border" />}
+            {(editing || hasExp) && (
+              <div>
+                <p className={lbl}>Experience</p>
+                {editing ? (
+                  <textarea rows={3} value={form.experience}
+                    onChange={(e) => setForm(f => ({ ...f, experience: e.target.value }))}
+                    placeholder="Work experience…" className={ta} />
+                ) : (
+                  <p className="mt-2 text-[13px] leading-relaxed text-foreground/80 whitespace-pre-line">{profile?.experience}</p>
+                )}
+              </div>
+            )}
+            {(hasExp || editing) && (hasEdu || editing) && <div className="border-t border-border" />}
+            {(editing || hasEdu) && (
+              <div>
+                <p className={lbl}>Education</p>
+                {editing ? (
+                  <textarea rows={2} value={form.education}
+                    onChange={(e) => setForm(f => ({ ...f, education: e.target.value }))}
+                    placeholder="B.S. Computer Science…" className={ta} />
+                ) : (
+                  <p className="mt-2 text-[13px] leading-relaxed text-foreground/80 whitespace-pre-line">{profile?.education}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Settings */}
+        <div className="mt-auto rounded-2xl border border-border bg-surface overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-4">
+            <div>
+              <p className="text-[14px] font-semibold text-foreground">Appearance</p>
+              <p className="text-[12px] text-muted">{theme === "dark" ? "Dark mode" : "Light mode"}</p>
+            </div>
+            <ThemeToggle />
+          </div>
+          <div className="border-t border-border" />
+          <button type="button"
+            onClick={async () => { setLoggingOut(true); await signOut(); router.push("/login"); }}
+            disabled={loggingOut}
+            className="w-full px-5 py-4 text-left text-[14px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors disabled:opacity-60">
+            {loggingOut ? "Signing out…" : "Log out"}
+          </button>
+        </div>
+
+      </aside>
+
+      {/* ── RIGHT PANEL ── */}
+      <main className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
+
+        {/* Stack + Domains */}
+        <div className="grid grid-cols-2 gap-5">
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            <div className="mb-4 flex items-center justify-between">
+              <p className="text-[12px] font-semibold uppercase tracking-widest text-muted">Tech Stack</p>
+              {detectingStack && <span className="text-[11px] text-muted animate-pulse">Detecting from GitHub…</span>}
+            </div>
+            {editing ? (
+              <div className="flex flex-wrap gap-2">
+                {STACK_OPTIONS.map((s) => {
+                  const on = form.stack.includes(s);
+                  return (
+                    <button key={s} onClick={() => setForm(f => ({ ...f, stack: on ? f.stack.filter(x => x !== s) : [...f.stack, s] }))}
+                      className={`rounded-lg border px-3.5 py-1.5 text-[13px] font-medium transition-all ${on ? "border-primary bg-primary text-white" : "border-border text-muted hover:border-primary/40 hover:text-foreground"}`}>
+                      {s}
+                    </button>
+                  );
+                })}
+              </div>
+            ) : profile?.stack && profile.stack.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {profile.stack.map((s) => (
+                  <span key={s} className="rounded-lg bg-surface-muted px-3.5 py-1.5 text-[13px] font-medium text-foreground">{s}</span>
+                ))}
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                {detectingStack ? (
+                  <p className="text-[13px] text-muted animate-pulse">Reading your GitHub repos…</p>
+                ) : (
+                  <>
+                    <button onClick={() => { setForm(toForm(profile, user)); setEditing(true); }} className="text-[13px] text-primary hover:underline">Add your stack</button>
+                    {profile?.github_username && (
+                      <button
+                        onClick={async () => {
+                          setDetectingStack(true);
+                          try {
+                            const result = await analyzeLinks([`https://github.com/${profile.github_username}`]);
+                            if (result && (result.stack.length > 0 || result.domains.length > 0)) {
+                              const withStack = mergeAnalyzeResult(profile, result);
+                              await saveUserProfile(withStack);
+                              setProfile(withStack);
+                              setForm(toForm(withStack, user));
+                            }
+                          } catch { /* silent */ }
+                          setDetectingStack(false);
+                        }}
+                        className="text-[13px] text-muted hover:text-foreground hover:underline"
+                      >
+                        Re-detect from GitHub
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             )}
           </div>
 
-          {/* Goal */}
-          {goalLabel && (
-            <div className="rounded-2xl border border-border bg-surface px-5 py-4">
-              <p className="text-[11px] font-semibold uppercase tracking-widest text-muted">Builder Goal</p>
-              <p className="mt-1.5 text-[15px] font-semibold text-foreground">{goalLabel}</p>
-            </div>
-          )}
-
-          {/* Extras */}
-          {(editing || hasCerts || hasExp || hasEdu) && (
-            <div className="rounded-2xl border border-border bg-surface p-5 space-y-5">
-              {(editing || hasCerts) && (
-                <div>
-                  <p className={lbl}>Certifications</p>
-                  {editing ? (
-                    <textarea rows={3} value={form.certifications}
-                      onChange={(e) => setForm(f => ({ ...f, certifications: e.target.value }))}
-                      placeholder={"AWS Solutions Architect\nGoogle Cloud Professional"} className={ta} />
-                  ) : (
-                    <ul className="mt-2 space-y-2">
-                      {profile?.certifications?.map((c) => (
-                        <li key={c} className="flex items-center gap-2.5 text-[13px] text-foreground">
-                          <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary" />{c}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-              {(hasCerts || editing) && (hasExp || editing) && <div className="border-t border-border" />}
-              {(editing || hasExp) && (
-                <div>
-                  <p className={lbl}>Experience</p>
-                  {editing ? (
-                    <textarea rows={3} value={form.experience}
-                      onChange={(e) => setForm(f => ({ ...f, experience: e.target.value }))}
-                      placeholder="Work experience…" className={ta} />
-                  ) : (
-                    <p className="mt-2 text-[13px] leading-relaxed text-foreground/80 whitespace-pre-line">{profile?.experience}</p>
-                  )}
-                </div>
-              )}
-              {(hasExp || editing) && (hasEdu || editing) && <div className="border-t border-border" />}
-              {(editing || hasEdu) && (
-                <div>
-                  <p className={lbl}>Education</p>
-                  {editing ? (
-                    <textarea rows={2} value={form.education}
-                      onChange={(e) => setForm(f => ({ ...f, education: e.target.value }))}
-                      placeholder="B.S. Computer Science…" className={ta} />
-                  ) : (
-                    <p className="mt-2 text-[13px] leading-relaxed text-foreground/80 whitespace-pre-line">{profile?.education}</p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Settings */}
-          <div className="mt-auto rounded-2xl border border-border bg-surface overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-5 py-4">
-              <div>
-                <p className="text-[14px] font-semibold text-foreground">Appearance</p>
-                <p className="text-[12px] text-muted">{theme === "dark" ? "Dark mode" : "Light mode"}</p>
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            <p className="mb-4 text-[12px] font-semibold uppercase tracking-widest text-muted">Focus Areas</p>
+            {editing ? (
+              <div className="flex flex-wrap gap-2">
+                {DOMAIN_OPTIONS.map((d) => {
+                  const on = form.domains.includes(d);
+                  return (
+                    <button key={d} onClick={() => setForm(f => ({ ...f, domains: on ? f.domains.filter(x => x !== d) : [...f.domains, d] }))}
+                      className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${on ? "border-primary bg-primary text-white" : "border-border text-muted hover:border-primary/40 hover:text-foreground"}`}>
+                      {d}
+                    </button>
+                  );
+                })}
               </div>
-              <ThemeToggle />
+            ) : profile?.domains && profile.domains.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {profile.domains.map((d) => (
+                  <span key={d} className="rounded-full border border-primary/20 bg-primary-light px-3.5 py-1.5 text-[13px] font-medium text-primary">{d}</span>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[13px] text-muted">
+                <button onClick={() => { setForm(toForm(profile, user)); setEditing(true); }} className="text-primary hover:underline">Add focus areas</button>
+              </p>
+            )}
+          </div>
+        </div>
+
+        {/* ── SOLVED PROBLEMS SHOWCASE ── */}
+        <div className="rounded-2xl border border-border bg-surface p-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-[12px] font-semibold uppercase tracking-widest text-muted">Solved & Shipped Problems</p>
+              <p className="mt-0.5 text-[11px] text-muted">Solutions verified and published on GitHub</p>
             </div>
-            <div className="border-t border-border" />
-            <button type="button"
-              onClick={async () => { setLoggingOut(true); await signOut(); router.push("/login"); }}
-              disabled={loggingOut}
-              className="w-full px-5 py-4 text-left text-[14px] font-semibold text-red-500 hover:bg-red-50 dark:hover:bg-red-950/20 transition-colors disabled:opacity-60">
-              {loggingOut ? "Signing out…" : "Log out"}
-            </button>
+            <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-700">
+              {solvedStats.solvedCount} Shipped
+            </span>
           </div>
 
-        </aside>
+          {solvedSolutions.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center text-xs text-muted">
+              You haven&apos;t shipped any problem solutions yet. Pick a problem in the feed and click &quot;I&apos;m building this&quot; to start!
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              {solvedSolutions.map((sol) => (
+                <div key={sol.id} className="rounded-xl border border-border bg-surface-subtle p-4 space-y-3 flex flex-col justify-between">
+                  <div className="space-y-1.5">
+                    <span className="rounded bg-primary-light px-2 py-0.5 text-[10px] font-bold uppercase text-primary">
+                      {sol.problems?.domain || "General"}
+                    </span>
+                    <h3 className="text-sm font-bold text-foreground line-clamp-1">
+                      {sol.problems?.headline || "Problem Solution"}
+                    </h3>
+                    <p className="text-xs text-muted font-mono bg-surface p-2 rounded max-h-16 overflow-hidden">
+                      {sol.code_snippet.slice(0, 120)}...
+                    </p>
+                  </div>
 
-        {/* ── RIGHT PANEL ── */}
-        <main className="flex min-w-0 flex-1 flex-col gap-5 overflow-y-auto p-5">
+                  <div className="flex items-center justify-between border-t border-border pt-3 text-xs">
+                    <span className="text-muted text-[11px]">
+                      Language: <strong className="text-foreground uppercase">{sol.language}</strong>
+                    </span>
+                    <a href={sol.github_repo_url} target="_blank" rel="noreferrer" className="font-bold text-primary hover:underline">
+                      View Repo →
+                    </a>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
 
-          {/* Stack + Domains */}
-          <div className="grid grid-cols-2 gap-5">
-            <div className="rounded-2xl border border-border bg-surface p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <p className="text-[12px] font-semibold uppercase tracking-widest text-muted">Tech Stack</p>
-                {detectingStack && <span className="text-[11px] text-muted animate-pulse">Detecting from GitHub…</span>}
+        {/* Projects */}
+        {projects.length > 0 && (
+          <div className="rounded-2xl border border-border bg-surface p-5">
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[12px] font-semibold uppercase tracking-widest text-muted">Imported Projects</p>
+                <p className="mt-0.5 text-[11px] text-muted">
+                  {projects.filter((p) => p.analysis).length}/{projects.length} analysed
+                </p>
               </div>
-              {editing ? (
-                <div className="flex flex-wrap gap-2">
-                  {STACK_OPTIONS.map((s) => {
-                    const on = form.stack.includes(s);
-                    return (
-                      <button key={s} onClick={() => setForm(f => ({ ...f, stack: on ? f.stack.filter(x => x !== s) : [...f.stack, s] }))}
-                        className={`rounded-lg border px-3.5 py-1.5 text-[13px] font-medium transition-all ${on ? "border-primary bg-primary text-white" : "border-border text-muted hover:border-primary/40 hover:text-foreground"}`}>
-                        {s}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : profile?.stack && profile.stack.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {profile.stack.map((s) => (
-                    <span key={s} className="rounded-lg bg-surface-muted px-3.5 py-1.5 text-[13px] font-medium text-foreground">{s}</span>
-                  ))}
-                </div>
-              ) : (
-                <div className="flex flex-wrap items-center gap-3">
-                  {detectingStack ? (
-                    <p className="text-[13px] text-muted animate-pulse">Reading your GitHub repos…</p>
+              {projects.some((p) => !p.analysis) && (
+                <button
+                  onClick={handleAnalyseAll}
+                  disabled={bulkAnalysing}
+                  className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
+                >
+                  {bulkAnalysing && bulkProgress ? (
+                    <>
+                      <span className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-white border-t-transparent" />
+                      {bulkProgress.done}/{bulkProgress.total}
+                    </>
                   ) : (
                     <>
-                      <button onClick={() => { setForm(toForm(profile, user)); setEditing(true); }} className="text-[13px] text-primary hover:underline">Add your stack</button>
-                      {profile?.github_username && (
-                        <button
-                          onClick={async () => {
-                            setDetectingStack(true);
-                            try {
-                              const result = await analyzeLinks([`https://github.com/${profile.github_username}`]);
-                              if (result && (result.stack.length > 0 || result.domains.length > 0)) {
-                                const withStack = mergeAnalyzeResult(profile, result);
-                                await saveUserProfile(withStack);
-                                setProfile(withStack);
-                                setForm(toForm(withStack, user));
-                              }
-                            } catch { /* silent */ }
-                            setDetectingStack(false);
-                          }}
-                          className="text-[13px] text-muted hover:text-foreground hover:underline"
-                        >
-                          Re-detect from GitHub
-                        </button>
-                      )}
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                      </svg>
+                      Analyse all
                     </>
                   )}
-                </div>
+                </button>
               )}
             </div>
-
-            <div className="rounded-2xl border border-border bg-surface p-5">
-              <p className="mb-4 text-[12px] font-semibold uppercase tracking-widest text-muted">Focus Areas</p>
-              {editing ? (
-                <div className="flex flex-wrap gap-2">
-                  {DOMAIN_OPTIONS.map((d) => {
-                    const on = form.domains.includes(d);
-                    return (
-                      <button key={d} onClick={() => setForm(f => ({ ...f, domains: on ? f.domains.filter(x => x !== d) : [...f.domains, d] }))}
-                        className={`rounded-full border px-3.5 py-1.5 text-[13px] font-medium transition-all ${on ? "border-primary bg-primary text-white" : "border-border text-muted hover:border-primary/40 hover:text-foreground"}`}>
-                        {d}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : profile?.domains && profile.domains.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
-                  {profile.domains.map((d) => (
-                    <span key={d} className="rounded-full border border-primary/20 bg-primary-light px-3.5 py-1.5 text-[13px] font-medium text-primary">{d}</span>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-[13px] text-muted">
-                  <button onClick={() => { setForm(toForm(profile, user)); setEditing(true); }} className="text-primary hover:underline">Add focus areas</button>
-                </p>
-              )}
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
+              {projects.map((p) => <ProjectCard key={p.id} p={p} />)}
             </div>
           </div>
+        )}
 
-          {/* Projects */}
-          {projects.length > 0 && (
-            <div className="rounded-2xl border border-border bg-surface p-5">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="text-[12px] font-semibold uppercase tracking-widest text-muted">Projects</p>
-                  <p className="mt-0.5 text-[11px] text-muted">
-                    {projects.filter((p) => p.analysis).length}/{projects.length} analysed
-                  </p>
-                </div>
-                {projects.some((p) => !p.analysis) && (
-                  <button
-                    onClick={handleAnalyseAll}
-                    disabled={bulkAnalysing}
-                    className="flex items-center gap-1.5 rounded-lg bg-primary px-3 py-2 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-60"
-                  >
-                    {bulkAnalysing && bulkProgress ? (
-                      <>
-                        <span className="h-3 w-3 animate-spin rounded-full border-[1.5px] border-white border-t-transparent" />
-                        {bulkProgress.done}/{bulkProgress.total}
-                      </>
-                    ) : (
-                      <>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-                          <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                        </svg>
-                        Analyse all
-                      </>
-                    )}
-                  </button>
-                )}
-              </div>
-              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 xl:grid-cols-4">
-                {projects.map((p) => <ProjectCard key={p.id} p={p} />)}
-              </div>
-            </div>
-          )}
-
-        </main>
-      </div>
+      </main>
+    </div>
   );
 }

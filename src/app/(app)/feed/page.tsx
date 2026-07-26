@@ -52,11 +52,9 @@ function FeedContent() {
     }
 
     if (isInitial || knownIds.current.size === 0) {
-      // First load — set the full feed and record all IDs
       fetched.forEach((p) => knownIds.current.add(p.id));
       setProblems(fetched);
     } else {
-      // Subsequent polls — only prepend genuinely new problems, keep existing order
       const newOnes = fetched.filter((p) => !knownIds.current.has(p.id));
       if (newOnes.length > 0) {
         newOnes.forEach((p) => knownIds.current.add(p.id));
@@ -70,7 +68,7 @@ function FeedContent() {
 
   const runScrape = useCallback(async () => {
     setScraping(true);
-    setEmptyMessage("Pulling live posts from Reddit & Hacker News…");
+    setEmptyMessage("Checking for live posts from Reddit & Hacker News…");
 
     try {
       const before = new Set(knownIds.current);
@@ -84,6 +82,7 @@ function FeedContent() {
         return;
       }
 
+      // Always load existing cards from Supabase so the feed displays stored cards
       const currentProblems = await loadProblems();
 
       if (currentProblems.length > 0) {
@@ -117,7 +116,13 @@ function FeedContent() {
         setEmptyMessage("Scrape finished with no new problems.");
       }
     } catch {
-      setEmptyMessage("Scrape request failed. Is the dev server running?");
+      // Fallback to existing database problems on error
+      const existing = await loadProblems();
+      if (existing.length > 0) {
+        setEmptyMessage(null);
+      } else {
+        setEmptyMessage("Scrape request failed. Is the dev server running?");
+      }
     } finally {
       setScraping(false);
     }
@@ -214,7 +219,6 @@ function FeedContent() {
     return bMatch - aMatch;
   });
 
-
   return (
     <>
       {newProblem && (
@@ -234,7 +238,6 @@ function FeedContent() {
       />
 
       <div className="px-6 py-4">
-
         {filtered.length === 0 ? (
           <div className="mx-auto max-w-lg py-20 text-center">
             <p className="mb-4 text-muted">

@@ -1,5 +1,5 @@
 import { scrapeAllSources } from "./scraper";
-import { structureProblem } from "./gemini";
+import { structureProblem, createFallbackProblem } from "./gemini";
 import {
   insertProblem,
   problemExistsByUrl,
@@ -10,8 +10,6 @@ import {
 import type { Problem, RawPost } from "./types";
 import { enrichProblem } from "./opportunity-score";
 
-// How many posts to send to Gemini at the same time.
-// Keep this at 10 — fine for Google AI Studio paid tier and won't hammer free tier.
 const GEMINI_CONCURRENCY = 3;
 
 async function processPost(post: RawPost): Promise<{
@@ -24,9 +22,20 @@ async function processPost(post: RawPost): Promise<{
       return { skipped: true };
     }
 
-    const structured = await structureProblem(post);
+    let structured: StructuredProblem | null = null;
+
+    try {
+      // 1. Try Gemini first
+      structured = await structureProblem(post);
+    } catch (geminiErr) {
+      console.warn(`Gemini failed for "${post.title.slice(0, 40)}". Using fallback card data.`);
+      // 2. Fall back to static card generation when Gemini fails or rate limits
+      structured = createFallbackProblem(post);
+    }
+
+    // If structureProblem returned null without throwing
     if (!structured) {
-      return { error: `Gemini could not structure: ${post.title.slice(0, 80)}` };
+      structured = createFallbackProblem(post);
     }
 
     // Drop anything where a solid solution already exists
@@ -34,6 +43,7 @@ async function processPost(post: RawPost): Promise<{
       return { skipped: true };
     }
 
+    // 3. Insert into Supabase (works with AI output OR fallback data)
     const { problem: inserted, error: insertError } = await insertProblem({
       headline: structured.headline,
       description: structured.description,
@@ -103,7 +113,6 @@ export async function runScrapePipeline(): Promise<{
   let skipped = 0;
   let geminiBlocked = false;
 
-  // Process posts in parallel batches to stay within Gemini rate limits
   for (let i = 0; i < posts.length; i += GEMINI_CONCURRENCY) {
     if (geminiBlocked) break;
 
@@ -115,14 +124,17 @@ export async function runScrapePipeline(): Promise<{
       if (r.skipped) skipped++;
       if (r.error) {
         errors.push(r.error);
-        // If Gemini is quota/cap blocked, stop processing the rest of the batch
-        if (r.error.includes("spending cap") || r.error.includes("Gemini API limit")) {
+        if (
+          r.error.includes("spending cap") ||
+          r.error.includes("Gemini API limit") ||
+          r.error.includes("rate limited") ||
+          r.error.includes("quota")
+        ) {
           geminiBlocked = true;
         }
       }
     }
 
-    // Brief pause between batches so we don't burst the rate limit
     if (!geminiBlocked && i + GEMINI_CONCURRENCY < posts.length) {
       await new Promise((r) => setTimeout(r, 1500));
     }
@@ -130,7 +142,7 @@ export async function runScrapePipeline(): Promise<{
 
   if (geminiBlocked) {
     errors.unshift(
-      "Gemini API spending cap hit. Go to ai.studio/spend to increase your cap."
+      "Gemini API limit hit. Showing existing stored problem cards."
     );
   }
 

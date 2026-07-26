@@ -80,7 +80,8 @@ async function searchReddit(query: string, since: Date): Promise<RelatedPost[]> 
 
     return posts;
   } catch (err) {
-    console.error("Reddit search error:", err);
+    // Catch 403 blocks gracefully and return empty list instead of crashing
+    console.warn("Reddit search unavailable or blocked (403).");
     return [];
   }
 }

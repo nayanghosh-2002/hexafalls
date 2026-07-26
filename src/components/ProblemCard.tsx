@@ -41,7 +41,12 @@ function SaveButton({ saved, onClick }: { saved?: boolean; onClick?: (e: React.M
   if (!onClick) return null;
   return (
     <button
-      onClick={onClick}
+      type="button"
+      onClick={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        onClick(e);
+      }}
       className={`absolute right-3 top-3 flex h-8 w-8 items-center justify-center rounded-full shadow-md transition-all ${
         saved
           ? "bg-primary"
